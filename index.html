@@ -5,22 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Happy Anniversary Ujala</title>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            font-family: sans-serif; 
-            background: radial-gradient(circle at center, #1a0005 0%, #000000 100%);
-            animation: pulseBg 4s infinite alternate ease-in-out;
-        }
-
-        @keyframes pulseBg {
-            0% { background: radial-gradient(circle at center, #1a0005 0%, #000000 100%); }
-            100% { background: radial-gradient(circle at center, #330011 0%, #050505 100%); }
-        }
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: sans-serif; }
         
         #ui-container {
             position: absolute; top: 20px; left: 20px; background: rgba(20, 20, 20, 0.8);
-            padding: 15px; border-radius: 8px; color: white; border: 1px solid #444; z-index: 100;
+            padding: 15px; border-radius: 8px; color: white; border: 1px solid #333; z-index: 100;
         }
         h1 { font-size: 14px; margin: 0 0 5px 0; color: #ff2a5f; text-transform: uppercase; }
         .status { font-size: 11px; color: #aaa; }
@@ -58,11 +47,11 @@
     <div id="anniversary-text">Happy anniversary Ujala</div>
 
     <div id="debug-container">
-        <div class="debug-label" id="debug-label">REQUESTING CAMERA...</div>
+        <div class="debug-label" id="debug-label">WAITING FOR CAMERA...</div>
         <canvas id="debug_canvas" width="640" height="480"></canvas>
     </div>
 
-    <video class="input_video" autoplay playsinline muted></video>
+    <video class="input_video"></video>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -71,6 +60,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <script>
+        // Validate external JS payload
         if (typeof imagePositions === 'undefined') {
             document.getElementById('status-text').innerText = "ERROR: data.js missing.";
             document.getElementById('status-text').style.color = "red";
@@ -79,6 +69,7 @@
         const PARTICLE_COUNT = typeof imagePositions !== 'undefined' ? imagePositions.length / 3 : 0;
         let isFist = false;
 
+        // --- THREE.JS INITIALIZATION ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 12;
@@ -94,6 +85,7 @@
             const heartPos = new Float32Array(PARTICLE_COUNT * 3);
             const heartCol = new Float32Array(PARTICLE_COUNT * 3);
 
+            // Shape definition logic
             for (let i = 0; i < PARTICLE_COUNT; i++) {
                 const t = Math.random() * Math.PI * 2;
                 const x = 16 * Math.pow(Math.sin(t), 3);
@@ -135,6 +127,7 @@
             const particleSystem = new THREE.Points(geometry, material);
             scene.add(particleSystem);
 
+            // Morph animation loop
             function animate() {
                 requestAnimationFrame(animate);
                 const pos = geometry.attributes.position.array;
@@ -168,6 +161,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight); 
         });
 
+        // --- MEDIAPIPE TRACKING AND LOGIC ---
         const videoElement = document.getElementsByClassName('input_video')[0];
         const textOverlay = document.getElementById('anniversary-text');
         const debugCanvas = document.getElementById('debug_canvas');
@@ -222,29 +216,12 @@
         hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
         hands.onResults(onResults);
 
-        // BRUTE FORCE CAMERA INITIATION
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then((stream) => {
-                videoElement.srcObject = stream;
-                debugLabel.innerText = "CAMERA ACTIVE";
-                
-                async function processVideo() {
-                    if (!videoElement.paused && !videoElement.ended) {
-                        await hands.send({image: videoElement});
-                    }
-                    requestAnimationFrame(processVideo);
-                }
-                videoElement.onloadeddata = () => {
-                    videoElement.play();
-                    processVideo();
-                };
-            })
-            .catch((err) => {
-                document.getElementById('status-text').innerText = "CAMERA BLOCKED. ALLOW PERMISSIONS.";
-                document.getElementById('status-text').style.color = "red";
-                debugLabel.innerText = "CAMERA ERROR";
-                alert("Camera access denied. Check your browser permissions and ensure you are using HTTPS.");
-            });
+        // --- ORIGINAL CAMERA WRAPPER (Restored) ---
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cameraFeed.start();
     </script>
 </body>
 </html>
