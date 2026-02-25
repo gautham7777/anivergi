@@ -3,161 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Happy Anniversary Ujala</title>
+    <title>Anniversary</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050505; font-family: sans-serif; }
-        #ui-container { position: absolute; top: 20px; left: 20px; background: rgba(20, 20, 20, 0.8); padding: 15px; border-radius: 8px; color: white; border: 1px solid #333; z-index: 100; }
-        h1 { font-size: 14px; margin: 0 0 5px 0; color: #ff2a5f; text-transform: uppercase; }
-        .status { font-size: 11px; color: #aaa; }
-        #anniversary-text { position: absolute; top: 85%; left: 50%; transform: translate(-50%, -50%); font-size: 3rem; color: #ff2a5f; font-weight: bold; text-align: center; text-shadow: 0 0 15px rgba(255, 42, 95, 0.8); pointer-events: none; opacity: 0; transition: opacity 1s ease-in-out; z-index: 50; white-space: nowrap; font-family: 'Georgia', serif; font-style: italic; }
+        body { margin: 0; overflow: hidden; background: #000; color: white; font-family: sans-serif; }
+        #debug { position: absolute; bottom: 10px; left: 10px; font-size: 12px; color: #0f0; z-index: 100; pointer-events: none; }
+        .input_video { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        #anniversary-text {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 3rem; color: #ff2a5f; font-weight: bold; opacity: 0; transition: 1s;
+        }
         #anniversary-text.visible { opacity: 1; }
-        .input_video { display: none; }
-        #debug-container { position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px; background: black; border: 2px solid #333; border-radius: 8px; overflow: hidden; z-index: 100; }
-        #debug_canvas { width: 100%; height: 100%; transform: scaleX(-1); } 
-        .debug-label { position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.7); color: #00ff00; font-size: 10px; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
     </style>
     <script src="data.js"></script>
 </head>
 <body>
-    <div id="ui-container">
-        <h1>Tracking Active</h1>
-        <div class="status" id="status-text">Show hand. Clench fist to reveal.</div>
-    </div>
+    <div id="debug">Log: Initializing...</div>
     <div id="anniversary-text">Happy anniversary Ujala</div>
-    <div id="debug-container">
-        <div class="debug-label" id="debug-label">WAITING FOR CAMERA...</div>
-        <canvas id="debug_canvas" width="640" height="480"></canvas>
-    </div>
     <video class="input_video" autoplay playsinline muted></video>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 
     <script>
-        const debugLabel = document.getElementById('debug-label');
-        const statusText = document.getElementById('status-text');
+        const log = (msg) => { 
+            console.log(msg); 
+            document.getElementById('debug').innerText = "Log: " + msg; 
+        };
 
-        if (typeof imagePositions === 'undefined') {
-            statusText.innerText = "ERROR: data.js missing.";
-            statusText.style.color = "red";
-        }
-
-        const PARTICLE_COUNT = typeof imagePositions !== 'undefined' ? imagePositions.length / 3 : 0;
-        let isFist = false;
-
+        // --- 1. SETUP THREE.JS ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 12;
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        camera.position.z = 15;
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        if (PARTICLE_COUNT > 0) {
-            const geometry = new THREE.BufferGeometry();
-            const currentPos = new Float32Array(PARTICLE_COUNT * 3);
-            const currentCol = new Float32Array(PARTICLE_COUNT * 3);
-            const heartPos = new Float32Array(PARTICLE_COUNT * 3);
-            const heartCol = new Float32Array(PARTICLE_COUNT * 3);
+        let isFist = false;
+        const PARTICLE_COUNT = typeof imagePositions !== 'undefined' ? imagePositions.length / 3 : 0;
+        
+        if (PARTICLE_COUNT === 0) log("ERROR: data.js not loaded or empty");
 
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const t = Math.random() * Math.PI * 2;
-                const x = 16 * Math.pow(Math.sin(t), 3);
-                const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-                
-                heartPos[i * 3] = x * 0.3 + (Math.random() - 0.5); heartPos[i * 3 + 1] = y * 0.3 + (Math.random() - 0.5); heartPos[i * 3 + 2] = (Math.random() - 0.5) * 2;
-                heartCol[i * 3] = 1.0; heartCol[i * 3 + 1] = 0.16; heartCol[i * 3 + 2] = 0.37;
-                currentPos[i * 3] = (Math.random() - 0.5) * 40; currentPos[i * 3 + 1] = (Math.random() - 0.5) * 40; currentPos[i * 3 + 2] = (Math.random() - 0.5) * 40;
-                currentCol[i * 3] = heartCol[i * 3]; currentCol[i * 3 + 1] = heartCol[i * 3 + 1]; currentCol[i * 3 + 2] = heartCol[i * 3 + 2];
-            }
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(PARTICLE_COUNT * 3);
+        const colors = new Float32Array(PARTICLE_COUNT * 3);
+        const heartPos = new Float32Array(PARTICLE_COUNT * 3);
 
-            geometry.setAttribute('position', new THREE.BufferAttribute(currentPos, 3));
-            geometry.setAttribute('color', new THREE.BufferAttribute(currentCol, 3));
-
-            function getTexture() {
-                const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32; const ctx = canvas.getContext('2d');
-                const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-                ctx.fillStyle = g; ctx.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(canvas);
-            }
-
-            const material = new THREE.PointsMaterial({ size: 0.2, vertexColors: true, map: getTexture(), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-            const particleSystem = new THREE.Points(geometry, material);
-            scene.add(particleSystem);
-
-            function animate() {
-                requestAnimationFrame(animate);
-                const pos = geometry.attributes.position.array; const col = geometry.attributes.color.array;
-                const targetPos = isFist ? imagePositions : heartPos; const targetCol = isFist ? imageColors : heartCol; const speed = isFist ? 0.08 : 0.05;
-
-                for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
-                    let tz = targetPos[i]; if (isFist && i % 3 === 2) tz += (Math.random() - 0.5) * 0.5;
-                    pos[i] += (targetPos[i] - pos[i]) * speed; col[i] += (targetCol[i] - col[i]) * speed;
-                }
-                geometry.attributes.position.needsUpdate = true; geometry.attributes.color.needsUpdate = true;
-                if (!isFist) particleSystem.rotation.y += 0.005; else particleSystem.rotation.y += (0 - particleSystem.rotation.y) * 0.1;
-                renderer.render(scene, camera);
-            }
-            animate();
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            const t = Math.random() * Math.PI * 2;
+            heartPos[i*3] = (16 * Math.pow(Math.sin(t), 3)) * 0.3;
+            heartPos[i*3+1] = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * 0.3;
+            heartPos[i*3+2] = (Math.random() - 0.5) * 2;
+            positions[i*3] = heartPos[i*3];
+            positions[i*3+1] = heartPos[i*3+1];
+            positions[i*3+2] = heartPos[i*3+2];
+            colors[i*3] = 1; colors[i*3+1] = 0.2; colors[i*3+2] = 0.4;
         }
 
-        const videoElement = document.querySelector('.input_video');
-        const textOverlay = document.getElementById('anniversary-text');
-        const debugCanvas = document.getElementById('debug_canvas');
-        const debugCtx = debugCanvas.getContext('2d');
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const material = new THREE.PointsMaterial({ size: 0.15, vertexColors: true, transparent: true, opacity: 0.8 });
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
 
-        function onResults(results) {
-            debugCtx.save();
-            debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
-            debugCtx.drawImage(results.image, 0, 0, debugCanvas.width, debugCanvas.height);
+        function animate() {
+            requestAnimationFrame(animate);
+            const posAttr = geometry.attributes.position.array;
+            const colAttr = geometry.attributes.color.array;
+            const targetP = isFist ? imagePositions : heartPos;
+            const targetC = isFist ? imageColors : [1, 0.2, 0.4];
 
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                debugLabel.innerText = "HAND DETECTED"; debugLabel.style.color = "#00ff00";
-                const hand = results.multiHandLandmarks[0]; const wrist = hand[0];
-                const palmSize = Math.hypot(wrist.x - hand[9].x, wrist.y - hand[9].y);
-                const avgDist = (Math.hypot(wrist.x - hand[8].x, wrist.y - hand[8].y) + Math.hypot(wrist.x - hand[12].x, wrist.y - hand[12].y) + Math.hypot(wrist.x - hand[16].x, wrist.y - hand[16].y) + Math.hypot(wrist.x - hand[20].x, wrist.y - hand[20].y)) / 4;
-                
-                if (avgDist < palmSize * 1.3) { isFist = true; textOverlay.classList.add('visible'); debugLabel.innerText = "FIST DETECTED"; debugLabel.style.color = "#ff2a5f"; } 
-                else { isFist = false; textOverlay.classList.remove('visible'); }
-
-                drawConnectors(debugCtx, hand, HAND_CONNECTIONS, {color: isFist ? '#ff2a5f' : '#ffffff', lineWidth: 2});
-                drawLandmarks(debugCtx, hand, {color: isFist ? '#ffffff' : '#ff2a5f', lineWidth: 1, radius: 2});
-            } else {
-                debugLabel.innerText = "NO HAND"; debugLabel.style.color = "#ff0000"; isFist = false; textOverlay.classList.remove('visible');
+            for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+                posAttr[i] += (targetP[i] - posAttr[i]) * 0.1;
+                // Simple color lerp
+                const targetVal = Array.isArray(targetC) ? targetC[i] : targetC;
+                colAttr[i] += (targetVal - colAttr[i]) * 0.1;
             }
-            debugCtx.restore();
+            geometry.attributes.position.needsUpdate = true;
+            geometry.attributes.color.needsUpdate = true;
+            if (!isFist) points.rotation.y += 0.01;
+            renderer.render(scene, camera);
         }
+        animate();
 
+        // --- 2. SETUP HANDS ---
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
-        hands.onResults(onResults);
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        
+        hands.onResults((results) => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const h = results.multiHandLandmarks[0];
+                const d = Math.hypot(h[0].x - h[8].x, h[0].y - h[8].y); // Wrist to Index Tip
+                isFist = d < 0.2; 
+                document.getElementById('anniversary-text').className = isFist ? 'visible' : '';
+                log(isFist ? "FIST!" : "HAND OPEN");
+            }
+        });
 
-        // STRICT WEBRTC WITH ERROR CATCHING AND DIMENSION GUARDS
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } })
-            .then((stream) => {
-                videoElement.srcObject = stream;
-                debugLabel.innerText = "CAMERA ACTIVE. LOADING AI...";
-                
-                videoElement.onplaying = () => {
-                    async function processVideo() {
-                        if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-                            try {
-                                await hands.send({image: videoElement});
-                            } catch (err) {
-                                debugLabel.innerText = "AI CRASHED";
-                                statusText.innerText = "Error: " + err.message;
-                            }
-                        }
-                        requestAnimationFrame(processVideo);
-                    }
-                    requestAnimationFrame(processVideo);
+        // --- 3. START CAMERA ---
+        const video = document.querySelector('.input_video');
+        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+            video.srcObject = stream;
+            video.onloadedmetadata = () => {
+                log("Camera Streaming...");
+                const process = async () => {
+                    await hands.send({image: video});
+                    requestAnimationFrame(process);
                 };
-            })
-            .catch((err) => {
-                debugLabel.innerText = "ERROR: " + err.name;
-                debugLabel.style.color = "red";
-                statusText.innerText = err.message;
-            });
+                process();
+            };
+        }).catch(e => log("Camera Error: " + e.message));
     </script>
 </body>
 </html>
