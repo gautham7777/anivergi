@@ -23,7 +23,21 @@
             white-space: nowrap; font-family: 'Georgia', serif; font-style: italic;
         }
         #anniversary-text.visible { opacity: 1; }
+        
+        /* Hidden input video */
         .input_video { display: none; }
+
+        /* Camera Preview Corner */
+        #debug-container {
+            position: absolute; bottom: 20px; right: 20px; width: 240px; height: 180px;
+            background: black; border: 2px solid #333; border-radius: 8px; overflow: hidden; z-index: 100;
+        }
+        /* Mirror the preview so it feels natural */
+        #debug_canvas { width: 100%; height: 100%; transform: scaleX(-1); } 
+        .debug-label {
+            position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.7); 
+            color: #00ff00; font-size: 10px; padding: 2px 4px; border-radius: 3px; font-family: monospace;
+        }
     </style>
     <script src="data.js"></script>
 </head>
@@ -31,20 +45,29 @@
 
     <div id="ui-container">
         <h1>Tracking Active</h1>
-        <div class="status">Show hand. Clench fist to reveal.</div>
+        <div class="status" id="status-text">Show hand. Clench fist to reveal.</div>
     </div>
 
     <div id="anniversary-text">Happy anniversary Ujala</div>
+
+    <div id="debug-container">
+        <div class="debug-label" id="debug-label">WAITING FOR CAMERA...</div>
+        <canvas id="debug_canvas" width="640" height="480"></canvas>
+    </div>
+
     <video class="input_video"></video>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <script>
         // Check if Python script was run
         if (typeof imagePositions === 'undefined') {
-            alert("CRITICAL ERROR: data.js not found. Run the Python script first.");
+            document.getElementById('status-text').innerText = "ERROR: data.js not found.";
+            alert("CRITICAL ERROR: data.js not found.");
         }
 
         const PARTICLE_COUNT = imagePositions.length / 3;
@@ -125,7 +148,6 @@
             const speed = isFist ? 0.08 : 0.05;
 
             for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
-                // Add slight depth wobble to image
                 let tz = targetPos[i];
                 if (isFist && i % 3 === 2) tz += (Math.random() - 0.5) * 0.5;
 
@@ -146,12 +168,29 @@
         }
         animate();
 
-        // --- HAND TRACKING ---
+        window.addEventListener('resize', () => { 
+            camera.aspect = window.innerWidth / window.innerHeight; 
+            camera.updateProjectionMatrix(); 
+            renderer.setSize(window.innerWidth, window.innerHeight); 
+        });
+
+        // --- HAND TRACKING & DEBUG CANVAS ---
         const videoElement = document.getElementsByClassName('input_video')[0];
         const textOverlay = document.getElementById('anniversary-text');
+        const debugCanvas = document.getElementById('debug_canvas');
+        const debugCtx = debugCanvas.getContext('2d');
+        const debugLabel = document.getElementById('debug-label');
 
         function onResults(results) {
+            // Draw raw camera feed to debug canvas
+            debugCtx.save();
+            debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+            debugCtx.drawImage(results.image, 0, 0, debugCanvas.width, debugCanvas.height);
+
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                debugLabel.innerText = "HAND DETECTED";
+                debugLabel.style.color = "#00ff00";
+
                 const hand = results.multiHandLandmarks[0];
                 const wrist = hand[0];
                 const palmSize = Math.hypot(wrist.x - hand[9].x, wrist.y - hand[9].y);
@@ -163,14 +202,32 @@
                 
                 const avgDist = (d1 + d2 + d3 + d4) / 4;
                 
+                // Determine fist state
                 if (avgDist < palmSize * 1.3) {
                     isFist = true;
                     textOverlay.classList.add('visible');
+                    debugLabel.innerText = "FIST DETECTED";
+                    debugLabel.style.color = "#ff2a5f";
                 } else {
                     isFist = false;
                     textOverlay.classList.remove('visible');
                 }
+
+                // Draw skeleton over the debug feed
+                // White if open hand, Pink if fist
+                const skeletonColor = isFist ? '#ff2a5f' : '#ffffff';
+                const landmarkColor = isFist ? '#ffffff' : '#ff2a5f';
+
+                drawConnectors(debugCtx, hand, HAND_CONNECTIONS, {color: skeletonColor, lineWidth: 2});
+                drawLandmarks(debugCtx, hand, {color: landmarkColor, lineWidth: 1, radius: 2});
+
+            } else {
+                debugLabel.innerText = "NO HAND";
+                debugLabel.style.color = "#ff0000";
+                isFist = false;
+                textOverlay.classList.remove('visible');
             }
+            debugCtx.restore();
         }
 
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
