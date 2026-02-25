@@ -34,7 +34,6 @@
         }
         #anniversary-text.visible { opacity: 1; }
         
-        /* Explicit tags to bypass mobile restrictions */
         .input_video { display: none; }
 
         #debug-container {
@@ -59,7 +58,7 @@
     <div id="anniversary-text">Happy anniversary Ujala</div>
 
     <div id="debug-container">
-        <div class="debug-label" id="debug-label">INITIALIZING CAMERA...</div>
+        <div class="debug-label" id="debug-label">REQUESTING CAMERA...</div>
         <canvas id="debug_canvas" width="640" height="480"></canvas>
     </div>
 
@@ -223,16 +222,29 @@
         hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
         hands.onResults(onResults);
 
-        const cameraFeed = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 640, height: 480
-        });
-        
-        cameraFeed.start().catch(err => {
-            document.getElementById('status-text').innerText = "CAMERA BLOCKED. ALLOW PERMISSIONS.";
-            document.getElementById('status-text').style.color = "red";
-            debugLabel.innerText = "CAMERA ERROR";
-        });
+        // BRUTE FORCE CAMERA INITIATION
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then((stream) => {
+                videoElement.srcObject = stream;
+                debugLabel.innerText = "CAMERA ACTIVE";
+                
+                async function processVideo() {
+                    if (!videoElement.paused && !videoElement.ended) {
+                        await hands.send({image: videoElement});
+                    }
+                    requestAnimationFrame(processVideo);
+                }
+                videoElement.onloadeddata = () => {
+                    videoElement.play();
+                    processVideo();
+                };
+            })
+            .catch((err) => {
+                document.getElementById('status-text').innerText = "CAMERA BLOCKED. ALLOW PERMISSIONS.";
+                document.getElementById('status-text').style.color = "red";
+                debugLabel.innerText = "CAMERA ERROR";
+                alert("Camera access denied. Check your browser permissions and ensure you are using HTTPS.");
+            });
     </script>
 </body>
 </html>
