@@ -36,9 +36,11 @@
 
     <script>
         const debugLabel = document.getElementById('debug-label');
+        const statusText = document.getElementById('status-text');
+
         if (typeof imagePositions === 'undefined') {
-            document.getElementById('status-text').innerText = "ERROR: data.js missing.";
-            document.getElementById('status-text').style.color = "red";
+            statusText.innerText = "ERROR: data.js missing.";
+            statusText.style.color = "red";
         }
 
         const PARTICLE_COUNT = typeof imagePositions !== 'undefined' ? imagePositions.length / 3 : 0;
@@ -130,17 +132,21 @@
         hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
         hands.onResults(onResults);
 
-        // RAW WEBRTC INSTEAD OF MEDIAPIPE WRAPPER
+        // STRICT WEBRTC WITH ERROR CATCHING AND DIMENSION GUARDS
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } })
             .then((stream) => {
                 videoElement.srcObject = stream;
-                debugLabel.innerText = "CAMERA ACTIVE. PROCESSING...";
+                debugLabel.innerText = "CAMERA ACTIVE. LOADING AI...";
                 
-                videoElement.onloadedmetadata = () => {
-                    videoElement.play();
+                videoElement.onplaying = () => {
                     async function processVideo() {
-                        if (!videoElement.paused && !videoElement.ended) {
-                            await hands.send({image: videoElement});
+                        if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+                            try {
+                                await hands.send({image: videoElement});
+                            } catch (err) {
+                                debugLabel.innerText = "AI CRASHED";
+                                statusText.innerText = "Error: " + err.message;
+                            }
                         }
                         requestAnimationFrame(processVideo);
                     }
@@ -150,7 +156,7 @@
             .catch((err) => {
                 debugLabel.innerText = "ERROR: " + err.name;
                 debugLabel.style.color = "red";
-                document.getElementById('status-text').innerText = err.message;
+                statusText.innerText = err.message;
             });
     </script>
 </body>
